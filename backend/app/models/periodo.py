@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.enums import EstadoPeriodo
+
+if TYPE_CHECKING:  # Solo para tipado: en runtime SQLAlchemy resuelve por su registro.
+    from app.models.comprobante import Comprobante
+    from app.models.empresa import Empresa
 
 
 class Periodo(Base):
@@ -26,5 +31,5 @@ class Periodo(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    empresa: Mapped["Empresa"] = relationship(back_populates="periodos")
-    comprobantes: Mapped[list["Comprobante"]] = relationship(back_populates="periodo")
+    empresa: Mapped[Empresa] = relationship(back_populates="periodos")
+    comprobantes: Mapped[list[Comprobante]] = relationship(back_populates="periodo")

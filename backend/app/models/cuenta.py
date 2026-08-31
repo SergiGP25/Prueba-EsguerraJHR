@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.enums import NaturalezaCuenta
+
+if TYPE_CHECKING:  # Solo para tipado: en runtime SQLAlchemy resuelve por su registro.
+    from app.models.comprobante import LineaContable
+    from app.models.empresa import Empresa
 
 
 class Cuenta(Base):
@@ -30,5 +35,5 @@ class Cuenta(Base):
     activa: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    empresa: Mapped["Empresa"] = relationship(back_populates="cuentas")
-    lineas: Mapped[list["LineaContable"]] = relationship(back_populates="cuenta")
+    empresa: Mapped[Empresa] = relationship(back_populates="cuentas")
+    lineas: Mapped[list[LineaContable]] = relationship(back_populates="cuenta")
