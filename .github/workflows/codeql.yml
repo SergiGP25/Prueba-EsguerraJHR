@@ -1,0 +1,42 @@
+# Análisis estático de seguridad sobre el backend (Python) y el frontend (TypeScript).
+# Complementa a `ci.yml`: allí el código se ejecuta y se mide cobertura; aquí se
+# analiza sin ejecutarlo, buscando patrones de vulnerabilidad (inyección, datos
+# sin sanear, secretos en código).
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Un barrido semanal detecta hallazgos nuevos aunque el código no cambie.
+    - cron: "0 6 * * 1"
+
+jobs:
+  analizar:
+    name: Analizar (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          language: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Analizar
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
