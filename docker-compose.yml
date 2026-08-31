@@ -1,3 +1,9 @@
+# Levanta el sistema completo con un solo comando:
+#   docker compose up --build
+#
+# El backend aplica las migraciones al arrancar (backend/entrypoint.sh), así que
+# no hacen falta pasos manuales sobre un entorno limpio.
+
 services:
   db:
     image: postgres:16-alpine
@@ -16,6 +22,51 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    container_name: contable-backend
+    restart: unless-stopped
+    environment:
+      # Dentro de la red de compose la base se alcanza por el nombre del servicio.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-contable}:${POSTGRES_PASSWORD:-contable}@db:5432/${POSTGRES_DB:-contable}
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-3000}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # La imagen slim no trae curl; se usa el propio Python.
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # El navegador del usuario resuelve el backend por el puerto publicado,
+        # no por el nombre del servicio de la red interna.
+        NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8000}
+        # Solo se usa detrás de proxies corporativos que interceptan TLS (ver README).
+        NPM_CONFIG_STRICT_SSL: ${NPM_CONFIG_STRICT_SSL:-}
+    container_name: contable-frontend
+    restart: unless-stopped
+    environment:
+      # Las peticiones desde los Server Components sí viajan por la red interna.
+      API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   contable_pgdata:
