@@ -1,0 +1,8 @@
+# Normaliza los finales de línea en el repositorio.
+* text=auto eol=lf
+
+# Los scripts que ejecuta Linux dentro de los contenedores deben conservar LF:
+# con CRLF, el intérprete falla con "no such file or directory".
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile text eol=lf
