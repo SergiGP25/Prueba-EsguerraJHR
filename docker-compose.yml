@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: contable-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-contable}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contable}
+      POSTGRES_DB: ${POSTGRES_DB:-contable}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - contable_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-contable} -d ${POSTGRES_DB:-contable}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  contable_pgdata:
