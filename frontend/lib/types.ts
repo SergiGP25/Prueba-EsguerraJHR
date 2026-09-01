@@ -46,6 +46,40 @@ export interface Tercero {
   nombre: string;
 }
 
+export interface CuentaPayload {
+  codigo: string;
+  nombre: string;
+  naturaleza: Naturaleza;
+  activa: boolean;
+}
+
+/** El código no se edita: es la clave del PUC con la que se referencian los reportes. */
+export interface CuentaUpdatePayload {
+  nombre?: string;
+  naturaleza?: Naturaleza;
+  activa?: boolean;
+}
+
+export interface TerceroPayload {
+  tipo_doc: string;
+  num_doc: string;
+  /** Si se omite y el documento es un NIT, el backend lo calcula. */
+  dv?: string | null;
+  nombre: string;
+}
+
+export interface TerceroUpdatePayload {
+  tipo_doc?: string;
+  num_doc?: string;
+  dv?: string | null;
+  nombre?: string;
+}
+
+export interface PeriodoPayload {
+  anio: number;
+  mes: number;
+}
+
 export interface LineaContable {
   id: number;
   cuenta_id: number;

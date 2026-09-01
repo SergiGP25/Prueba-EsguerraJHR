@@ -39,6 +39,8 @@ const ESTILOS_ESTADO: Record<string, string> = {
   reversado: "bg-slate-200 text-slate-700",
   abierto: "bg-emerald-100 text-emerald-800",
   cerrado: "bg-slate-200 text-slate-700",
+  activa: "bg-emerald-100 text-emerald-800",
+  inactiva: "bg-slate-200 text-slate-700",
 };
 
 export function Etiqueta({ estado }: { estado: string }) {
