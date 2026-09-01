@@ -235,6 +235,7 @@ backend/app/
   schemas.py   Contrato del API: validación de entrada y forma de salida (Pydantic).
   services/    Reglas de negocio. No conocen HTTP.
     accounting.py  Escritura: borradores, contabilización, reversión, cierre.
+    catalogos.py   Plan de cuentas y terceros: unicidad y dígito de verificación.
     reporting.py   Lectura: libro mayor y saldos.
     uvt.py         Integración externa.
     exogena.py     Generación del archivo.
@@ -251,6 +252,29 @@ accionables sin interpretar textos.
 En el frontend, `lib/api.ts` es el único módulo que conoce la URL del backend, `lib/errors.ts`
 el único que normaliza sus tres formas de error, y `lib/money.ts` el único que hace aritmética
 monetaria.
+
+### Catálogos maestros: no se borra, se corrige
+
+Ni las cuentas ni los terceros se eliminan. Ambos están referenciados por movimientos ya
+registrados, así que un borrado dejaría el libro mayor apuntando al vacío y rompería la
+auditoría. En su lugar:
+
+- Una **cuenta se inactiva**. Deja de ofrecerse al registrar comprobantes y `validar_para_contabilizar`
+  la rechaza, pero sus movimientos históricos siguen intactos. Su **código no es editable**: es la
+  clave del PUC con la que se referencian los reportes.
+- Un **tercero se corrige**, documento incluido. Como no hay borrado, un tercero creado con el NIT
+  mal escrito quedaría atrapado en el catálogo y en la exógena; permitir editarlo es la salida, y
+  la unicidad y el DV se revalidan al guardar.
+
+**DV del tercero:** al crear o editar un NIT, si el dígito de verificación no viene, se calcula con
+`calcular_dv` ([core/nit.py](backend/app/core/nit.py)); si viene y no corresponde, se rechaza con
+`TERCERO_DV_INVALIDO` indicando cuál era el correcto. Antes se aceptaba cualquier valor y el efecto
+solo aparecía meses después, cuando el tercero quedaba **excluido en silencio** del archivo de
+exógena. La regla vive en `services/catalogos.py` y no en el formulario: el algoritmo DIAN tiene una
+sola implementación y el frontend no la reimplementa en TypeScript.
+
+Las rutas de edición van **anidadas bajo la empresa** (`/empresas/{id}/cuentas/{cuenta_id}`) porque
+sin ese dato no hay forma de comprobar que el registro pertenece a quien lo edita.
 
 ### Frontend: Server Components y sin librería de datos
 
@@ -271,10 +295,11 @@ optimistas, `router.refresh()` cubre la revalidación y la dependencia no se jus
 | GET | `/health` | Estado del servicio. |
 | POST/GET | `/api/empresas` | Crear y listar empresas. |
 | POST/GET | `/api/empresas/{id}/cuentas` | Plan de cuentas. |
-| PATCH | `/api/cuentas/{id}` | Activar/inactivar o renombrar. |
+| PATCH | `/api/empresas/{id}/cuentas/{cuenta_id}` | Renombrar, cambiar naturaleza o activar/inactivar. |
 | POST/GET | `/api/empresas/{id}/periodos` | Períodos contables. |
 | POST | `/api/periodos/{id}/cerrar` | Cierre de período. |
-| POST/GET | `/api/empresas/{id}/terceros` | Terceros. |
+| POST/GET | `/api/empresas/{id}/terceros` | Terceros (el DV se calcula si se omite). |
+| PATCH | `/api/empresas/{id}/terceros/{tercero_id}` | Corregir documento o nombre. |
 | POST/GET | `/api/empresas/{id}/comprobantes` | Crear borrador y listar (paginado). |
 | GET/PUT | `/api/comprobantes/{id}` | Consultar y editar borrador. |
 | POST | `/api/comprobantes/{id}/contabilizar` | Contabilización atómica. |
@@ -292,7 +317,7 @@ optimistas, `router.refresh()` cubre la revalidación y la dependencia no se jus
 `CUENTA_INACTIVA`, `CUENTA_NO_ENCONTRADA`, `TERCERO_NO_ENCONTRADO`, `PERIODO_CERRADO`,
 `PERIODO_YA_CERRADO`, `COMPROBANTE_PROTEGIDO`, `COMPROBANTE_YA_REVERSADO`,
 `REVERSION_ESTADO_INVALIDO`, `ESTADO_INVALIDO`, `UVT_NO_DISPONIBLE`, `NIT_DV_INVALIDO`,
-`RANGO_INVALIDO`.
+`RANGO_INVALIDO`, `CUENTA_DUPLICADA`, `TERCERO_DUPLICADO`, `TERCERO_DV_INVALIDO`.
 
 ## 6. Reapertura de período
 
@@ -311,6 +336,10 @@ Cómo la abordaría:
    cerrados, para no invalidar saldos ya arrastrados. La alternativa —y lo que suele hacerse en
    la práctica— es registrar el ajuste en el período abierto actual mediante una reversión, que
    sí está implementada.
+
+Como no hay vuelta atrás, el cierre desde la interfaz (**Administración → Períodos**) pide una
+confirmación explícita en la propia fila, con la consecuencia escrita junto al botón y no en un
+párrafo que el usuario ya pasó de largo.
 
 ## 7. Limitaciones conocidas
 
@@ -334,8 +363,6 @@ Cómo la abordaría:
 | Pendiente | Cómo lo abordaría |
 |---|---|
 | Pruebas de frontend | Vitest + Testing Library para `money.ts` y `errors.ts` (lógica pura), y una prueba de integración del formulario que verifique totales y manejo de errores. |
-| Administración de plan de cuentas y terceros desde la UI | Ya existen los endpoints; falta un CRUD sencillo. Hoy se cargan con el seed. |
-| Cierre de período desde la UI | El endpoint existe; falta la vista con la confirmación correspondiente. |
 | Balance de prueba | Misma consulta del libro mayor agregada por cuenta; reutilizaría `reporting.py`. |
 | Exportación del libro mayor a Excel | Un endpoint que reutilice `libro_mayor()` y serialice con `openpyxl`. |
 
