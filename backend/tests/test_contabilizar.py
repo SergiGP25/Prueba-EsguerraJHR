@@ -111,7 +111,7 @@ def test_linea_con_debito_y_credito_se_rechaza(client, empresa, cuentas):
 
 def test_cuenta_inactiva_se_rechaza(client, empresa, cuentas, compra_valida):
     borrador = _crear_borrador(client, empresa.id, compra_valida)
-    client.patch(f"/api/cuentas/{cuentas['2408'].id}", json={"activa": False})
+    client.patch(f"/api/empresas/{empresa.id}/cuentas/{cuentas['2408'].id}", json={"activa": False})
 
     respuesta = client.post(f"/api/comprobantes/{borrador.json()['id']}/contabilizar")
     assert respuesta.status_code == 422

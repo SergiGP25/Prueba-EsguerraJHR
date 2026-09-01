@@ -35,10 +35,11 @@ from app.schemas import (
     ReversionCreate,
     TerceroCreate,
     TerceroOut,
+    TerceroUpdate,
     UvtSincronizacionOut,
     UvtValorOut,
 )
-from app.services import accounting, exogena, reporting, uvt
+from app.services import accounting, catalogos, exogena, reporting, uvt
 
 router = APIRouter(prefix="/api")
 
@@ -59,6 +60,20 @@ def _empresa_or_404(db: Session, empresa_id: int) -> Empresa:
     if empresa is None:
         raise HTTPException(status_code=404, detail="Empresa no encontrada.")
     return empresa
+
+
+def _cuenta_or_404(db: Session, empresa_id: int, cuenta_id: int) -> Cuenta:
+    cuenta = db.get(Cuenta, cuenta_id)
+    if cuenta is None or cuenta.empresa_id != empresa_id:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada en la empresa.")
+    return cuenta
+
+
+def _tercero_or_404(db: Session, empresa_id: int, tercero_id: int) -> Tercero:
+    tercero = db.get(Tercero, tercero_id)
+    if tercero is None or tercero.empresa_id != empresa_id:
+        raise HTTPException(status_code=404, detail="Tercero no encontrado en la empresa.")
+    return tercero
 
 
 def _comprobante_or_404(db: Session, comprobante_id: int) -> Comprobante:
@@ -93,13 +108,7 @@ def obtener_empresa(empresa_id: int, db: Session = Depends(get_db)) -> Empresa:
 @router.post("/empresas/{empresa_id}/cuentas", response_model=CuentaOut, status_code=201)
 def crear_cuenta(empresa_id: int, payload: CuentaCreate, db: Session = Depends(get_db)) -> Cuenta:
     _empresa_or_404(db, empresa_id)
-    duplicada = db.scalar(
-        select(Cuenta).where(Cuenta.empresa_id == empresa_id, Cuenta.codigo == payload.codigo)
-    )
-    if duplicada:
-        raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese código.")
-    cuenta = Cuenta(empresa_id=empresa_id, **payload.model_dump())
-    db.add(cuenta)
+    cuenta = catalogos.crear_cuenta(db, empresa_id, payload)
     db.commit()
     db.refresh(cuenta)
     return cuenta
@@ -111,14 +120,17 @@ def listar_cuentas(empresa_id: int, db: Session = Depends(get_db)) -> list[Cuent
     return list(db.scalars(select(Cuenta).where(Cuenta.empresa_id == empresa_id).order_by(Cuenta.codigo)).all())
 
 
-@router.patch("/cuentas/{cuenta_id}", response_model=CuentaOut)
-def actualizar_cuenta(cuenta_id: int, payload: CuentaUpdate, db: Session = Depends(get_db)) -> Cuenta:
-    cuenta = db.get(Cuenta, cuenta_id)
-    if cuenta is None:
-        raise HTTPException(status_code=404, detail="Cuenta no encontrada.")
-    data = payload.model_dump(exclude_unset=True)
-    for key, value in data.items():
-        setattr(cuenta, key, value)
+@router.patch("/empresas/{empresa_id}/cuentas/{cuenta_id}", response_model=CuentaOut)
+def actualizar_cuenta(
+    empresa_id: int, cuenta_id: int, payload: CuentaUpdate, db: Session = Depends(get_db)
+) -> Cuenta:
+    """Editar nombre y naturaleza, o inactivar la cuenta.
+
+    La ruta va anidada bajo la empresa para poder comprobar que la cuenta le pertenece:
+    sin ese dato no hay forma de impedir que se edite el plan de cuentas de otra.
+    """
+    cuenta = _cuenta_or_404(db, empresa_id, cuenta_id)
+    catalogos.actualizar_cuenta(db, cuenta, payload)
     db.commit()
     db.refresh(cuenta)
     return cuenta
@@ -187,9 +199,9 @@ def consultar_libro_mayor(
 
 @router.post("/empresas/{empresa_id}/terceros", response_model=TerceroOut, status_code=201)
 def crear_tercero(empresa_id: int, payload: TerceroCreate, db: Session = Depends(get_db)) -> Tercero:
+    """Registra un tercero. Si es NIT y no se informa el DV, se calcula."""
     _empresa_or_404(db, empresa_id)
-    tercero = Tercero(empresa_id=empresa_id, **payload.model_dump())
-    db.add(tercero)
+    tercero = catalogos.crear_tercero(db, empresa_id, payload)
     db.commit()
     db.refresh(tercero)
     return tercero
@@ -199,6 +211,17 @@ def crear_tercero(empresa_id: int, payload: TerceroCreate, db: Session = Depends
 def listar_terceros(empresa_id: int, db: Session = Depends(get_db)) -> list[Tercero]:
     _empresa_or_404(db, empresa_id)
     return list(db.scalars(select(Tercero).where(Tercero.empresa_id == empresa_id).order_by(Tercero.nombre)).all())
+
+
+@router.patch("/empresas/{empresa_id}/terceros/{tercero_id}", response_model=TerceroOut)
+def actualizar_tercero(
+    empresa_id: int, tercero_id: int, payload: TerceroUpdate, db: Session = Depends(get_db)
+) -> Tercero:
+    tercero = _tercero_or_404(db, empresa_id, tercero_id)
+    catalogos.actualizar_tercero(db, tercero, payload)
+    db.commit()
+    db.refresh(tercero)
+    return tercero
 
 
 @router.post("/empresas/{empresa_id}/comprobantes", response_model=ComprobanteOut, status_code=201)
