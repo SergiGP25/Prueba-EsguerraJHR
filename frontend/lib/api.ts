@@ -11,15 +11,26 @@ import type {
   Comprobante,
   ComprobantePayload,
   Cuenta,
+  CuentaPayload,
+  CuentaUpdatePayload,
   Empresa,
   ExogenaGeneracion,
   LibroMayor,
   Periodo,
+  PeriodoPayload,
   Tercero,
+  TerceroPayload,
+  TerceroUpdatePayload,
   UvtValor,
 } from "./types";
 
-export function urlBase(): string {
+/**
+ * URL para las peticiones que hace este proceso. En el servidor dentro de Docker
+ * el backend se alcanza por la red interna; en el navegador, por el puerto publicado.
+ *
+ * Es privada a proposito: nunca debe terminar en un href (ver `urlPublica`).
+ */
+function urlInterna(): string {
   const enServidor = typeof window === "undefined";
   const url = enServidor
     ? process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL
@@ -27,8 +38,19 @@ export function urlBase(): string {
   return url ?? "http://localhost:8000";
 }
 
+/**
+ * URL que viajará al navegador (href, descargas). Nunca usa `API_URL`: ese host
+ * solo existe dentro de la red de Docker y el navegador del usuario no lo resuelve.
+ *
+ * `NEXT_PUBLIC_API_URL` se incrusta en tiempo de compilación, así que devuelve el
+ * mismo valor se evalúe en el servidor o en el cliente.
+ */
+export function urlPublica(ruta: string): string {
+  return `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api${ruta}`;
+}
+
 async function pedir<T>(ruta: string, init?: RequestInit): Promise<T> {
-  const respuesta = await fetch(`${urlBase()}/api${ruta}`, {
+  const respuesta = await fetch(`${urlInterna()}/api${ruta}`, {
     headers: { "Content-Type": "application/json" },
     // Los datos contables cambian con cada operación: nunca se sirven de caché.
     cache: "no-store",
@@ -47,14 +69,40 @@ const json = (cuerpo: unknown): RequestInit => ({
 
 export const obtenerEmpresas = () => pedir<Empresa[]>("/empresas");
 
+const parchear = (cuerpo: unknown): RequestInit => ({
+  method: "PATCH",
+  body: JSON.stringify(cuerpo),
+});
+
 export const obtenerCuentas = (empresaId: number) =>
   pedir<Cuenta[]>(`/empresas/${empresaId}/cuentas`);
+
+export const crearCuenta = (empresaId: number, datos: CuentaPayload) =>
+  pedir<Cuenta>(`/empresas/${empresaId}/cuentas`, json(datos));
+
+export const actualizarCuenta = (
+  empresaId: number,
+  cuentaId: number,
+  datos: CuentaUpdatePayload,
+) => pedir<Cuenta>(`/empresas/${empresaId}/cuentas/${cuentaId}`, parchear(datos));
 
 export const obtenerTerceros = (empresaId: number) =>
   pedir<Tercero[]>(`/empresas/${empresaId}/terceros`);
 
+export const crearTercero = (empresaId: number, datos: TerceroPayload) =>
+  pedir<Tercero>(`/empresas/${empresaId}/terceros`, json(datos));
+
+export const actualizarTercero = (
+  empresaId: number,
+  terceroId: number,
+  datos: TerceroUpdatePayload,
+) => pedir<Tercero>(`/empresas/${empresaId}/terceros/${terceroId}`, parchear(datos));
+
 export const obtenerPeriodos = (empresaId: number) =>
   pedir<Periodo[]>(`/empresas/${empresaId}/periodos`);
+
+export const crearPeriodo = (empresaId: number, datos: PeriodoPayload) =>
+  pedir<Periodo>(`/empresas/${empresaId}/periodos`, json(datos));
 
 export const cerrarPeriodo = (periodoId: number) =>
   pedir<Periodo>(`/periodos/${periodoId}/cerrar`, { method: "POST" });
@@ -116,7 +164,7 @@ export async function generarExogena(datos: {
   anio_gravable: number;
   umbral_uvt: string;
 }): Promise<{ blob: Blob; nombreArchivo: string; generacionId: string | null }> {
-  const respuesta = await fetch(`${urlBase()}/api/exogena/generar`, {
+  const respuesta = await fetch(`${urlInterna()}/api/exogena/generar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(datos),
@@ -135,4 +183,4 @@ export async function generarExogena(datos: {
 
 /** URL pública de re-descarga: el navegador la abre directamente. */
 export const urlArchivoExogena = (generacionId: number) =>
-  `${urlBase()}/api/exogena/historial/${generacionId}/archivo`;
+  urlPublica(`/exogena/historial/${generacionId}/archivo`);
