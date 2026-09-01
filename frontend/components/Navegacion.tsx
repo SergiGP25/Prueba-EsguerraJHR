@@ -7,6 +7,7 @@ const ENLACES = [
   { href: "/comprobantes", etiqueta: "Comprobantes" },
   { href: "/libro-mayor", etiqueta: "Libro mayor" },
   { href: "/exogena", etiqueta: "Exógena" },
+  { href: "/administracion", etiqueta: "Administración" },
 ];
 
 /**
