@@ -89,6 +89,19 @@ class TerceroCreate(BaseModel):
     nombre: str = Field(min_length=1, max_length=255)
 
 
+class TerceroUpdate(BaseModel):
+    """A diferencia de la cuenta, el documento sí es editable.
+
+    Como no existe borrado, un tercero creado con el documento mal escrito quedaría
+    atrapado en el catálogo para siempre. La unicidad y el DV se revalidan al guardar.
+    """
+
+    tipo_doc: str | None = Field(default=None, max_length=10)
+    num_doc: str | None = Field(default=None, min_length=1, max_length=20)
+    dv: str | None = Field(default=None, min_length=1, max_length=1)
+    nombre: str | None = Field(default=None, min_length=1, max_length=255)
+
+
 class TerceroOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
